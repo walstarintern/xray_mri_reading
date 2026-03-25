@@ -1,0 +1,8 @@
+xray_env/
+__pycache__/
+*.pyc
+*.pt
+*.pth
+*.onnx
+.env
+.DS_Store
