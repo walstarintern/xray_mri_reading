@@ -4,4 +4,8 @@ torchvision
 torchxrayvision
 ollama
 Pillow
-numpy
+requests
+timm
+albumentations
+numpy<2.0.0
+opencv-python-headless<4.10

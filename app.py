@@ -2,6 +2,23 @@ import streamlit as st
 import os
 import tempfile
 from PIL import Image
+import requests
+
+def get_translation(text, dest_lang):
+    """Sends text to the local translation microservice."""
+    if dest_lang == "en" or not text:
+        return text
+    try:
+        response = requests.post("http://127.0.0.1:5000/translate", json={
+            "text": text,
+            "dest": dest_lang
+        })
+        if response.status_code == 200:
+            return response.json().get("translated_text", text)
+        else:
+            return f"[Translation Error] {text}"
+    except Exception:
+        return f"[Translation Server Offline] {text}"
 
 # Import our custom engines
 from vision.router import VisionRouter
@@ -27,7 +44,12 @@ if "llm" not in st.session_state:
 with st.sidebar:
     st.title("⚙️ System Settings")
     body_part = st.selectbox("Select Body Part", ["Chest", "Bone"])
-    target_language = st.selectbox("Translation Language", ["English", "Hindi", "Marathi", "Spanish", "French"])
+    target_language = st.selectbox("Translation Language", ["English", "Hindi", "Marathi"])
+    
+    # Map the UI selection to Google Translate codes
+    lang_codes = {"English": "en", "Hindi": "hi", "Marathi": "mr"}
+    dest_code = lang_codes.get(target_language, "en")
+
     user_level = st.selectbox("Explanation Level", ["Patient (Simple terms)", "Medical Student", "Expert Radiologist"])
 
 # --- Main Interface ---
@@ -57,6 +79,10 @@ if uploaded_file is not None:
                     findings = st.session_state.vision_router.route_and_analyze(temp_path, body_part)
                     st.session_state.cnn_findings = findings
                     st.success("Vision Analysis Complete!")
+                    
+                    # 🚨 ADD THIS: Show us exactly what the DenseNet model says!
+                    st.info(f"🧠 RAW DENSENET OUTPUT: {findings}")
+                    
                 except Exception as e:
                     st.error(f"Vision Engine Error: {e}")
                 
@@ -65,27 +91,38 @@ if uploaded_file is not None:
 
             if st.session_state.cnn_findings:
                 with st.spinner("Generating multilingual summary with Local LLM..."):
-                    # 2. Build the dynamic prompt
+                    # 2. Build the dynamic prompt (English focus)
+                    # 2. Build the dynamic prompt (English focus)
+                    # st.session_state.system_prompt = build_medical_prompt(
+                    #     cnn_findings=st.session_state.cnn_findings,
+                    #     target_language="English", # <-- We force English here!
+                    #     user_level=user_level
+                    # )
+                    # 2. Build the dynamic prompt (English focus)
                     st.session_state.system_prompt = build_medical_prompt(
                         cnn_findings=st.session_state.cnn_findings,
-                        target_language=target_language,
+                        body_part=body_part,       
                         user_level=user_level
                     )
                     
                     # 3. Generate initial summary
                     initial_prompt = f"Please provide the initial summary for this {body_part} X-ray."
-                    response = st.session_state.llm.chat(
+                    
+                    # AI generates simple English response
+                    english_response = st.session_state.llm.chat(
                         system_prompt=st.session_state.system_prompt,
                         user_question=initial_prompt,
                         chat_history=[]
                     )
                     
+                    # Send to Microservice for translation
+                    final_response = get_translation(english_response, dest_code)
+                    
                     # 4. Save to chat history
                     st.session_state.chat_history = [
-                        {"role": "assistant", "content": response}
+                        {"role": "assistant", "content": final_response}
                     ]
 
-    # --- Chat Interface ---
     # --- Chat Interface ---
     with col2:
         st.subheader("💬 Clinical Discussion")
@@ -106,28 +143,37 @@ if uploaded_file is not None:
             else:
                 # Append user question to UI
                 st.session_state.chat_history.append({"role": "user", "content": prompt})
-                with st.chat_message("user"):
-                    st.markdown(prompt)
+                with chat_container:
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
 
                 # Get LLM response
-                with st.chat_message("assistant"):
-                    with st.spinner("Thinking..."):
-                        # Format history for Ollama (excluding system prompt from history list)
-                        history_for_llm = [
-                            {"role": msg["role"], "content": msg["content"]} 
-                            for msg in st.session_state.chat_history[:-1]
-                        ]
+                with chat_container:
+                    with st.chat_message("assistant"):
+                        with st.spinner("Translating and Thinking..."):
+                            
+                            # 1. Translate user's question TO English for the AI
+                            english_prompt = get_translation(prompt, "en") if dest_code != "en" else prompt
+                            
+                            # Format history for Ollama (excluding system prompt)
+                            history_for_llm = [
+                                {"role": msg["role"], "content": msg["content"]} 
+                                for msg in st.session_state.chat_history[:-1]
+                            ]
+                            
+                            # 2. Get AI's answer in English
+                            english_answer = st.session_state.llm.chat(
+                                system_prompt=st.session_state.system_prompt,
+                                user_question=english_prompt,
+                                chat_history=history_for_llm
+                            )
+                            
+                            # 3. Translate AI's answer BACK to target language
+                            final_answer = get_translation(english_answer, dest_code)
+                            st.markdown(final_answer)
                         
-                        answer = st.session_state.llm.chat(
-                            system_prompt=st.session_state.system_prompt,
-                            user_question=prompt,
-                            chat_history=history_for_llm
-                        )
-                        st.markdown(answer)
-                        
-                # Append AI answer to history
-                st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                # Append translated AI answer to history
+                st.session_state.chat_history.append({"role": "assistant", "content": final_answer})
 
-                # --- THE MAGIC FIX ---
                 # Force a screen refresh to lock the input bar at the bottom!
                 st.rerun()

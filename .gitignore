@@ -1,8 +1,54 @@
-xray_env/
 __pycache__/
 *.pyc
+xray_env/
 *.pt
 *.pth
 *.onnx
 .env
+# 🔹 Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 🔹 Virtual environment
+venv/
+env/
+xray_env/
+.venv/
+
+# 🔹 Distribution / packaging
+*.egg-info/
+*.dist-info/
+build/
+dist/
+
+# 🔹 Logs
+*.log
+
+# 🔹 OS files
 .DS_Store
+Thumbs.db
+
+# 🔹 VS Code settings
+.vscode/
+
+# 🔹 Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# 🔹 Model files (optional - if large)
+*.h5
+*.pt
+*.pth
+*.ckpt
+
+# 🔹 Dataset (IMPORTANT)
+data/
+datasets/
+*.zip
+*.tar
+*.gz
+
+# 🔹 Temporary files
+*.tmp
+*.temp
