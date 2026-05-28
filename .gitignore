@@ -33,13 +33,6 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints/
 
-# Model files
-*.h5
-*.pt
-*.pth
-*.ckpt
-*.onnx
-
 # Datasets
 data/
 datasets/
